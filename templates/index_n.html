@@ -21,7 +21,7 @@
         }
         .address-row {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             margin-bottom: 10px;
             align-items: center;
         }
@@ -29,12 +29,11 @@
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            box-sizing: border-box;
         }
         .city { width: 15%; }
-        .street { width: 70%; }
-        .house { width: 10%; }
-        .entrance { width: 7%; }
+        .street { width: 55%; }
+        .house { width: 15%; }
+        .entrance { width: 10%; }
         .move-btn, .remove-btn {
             background: #e0e0e0;
             border: none;
@@ -42,9 +41,6 @@
             height: 30px;
             border-radius: 4px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         .move-btn:hover, .remove-btn:hover {
             background: #d0d0d0;
@@ -68,7 +64,6 @@
             border-radius: 4px;
         }
         h2 { margin-top: 0; }
-        .controls { width: 68px; }
     </style>
 </head>
 <body>
@@ -86,9 +81,9 @@
                     <input type="text" class="address-field city" name="start-city"
                            value="{{ form_data.get('start-city', 'Минск') }}" placeholder="Город" required>
                     <input type="text" class="address-field street" name="start-street"
-                           value="{{ form_data.get('start-street', 'ул. Лобанка') }}" placeholder="Улица" required>
+                           value="{{ form_data.get('start-street', '') }}" placeholder="Улица" required>
                     <input type="text" class="address-field house" name="start-house"
-                           value="{{ form_data.get('start-house', 'д.77') }}" placeholder="Дом" required>
+                           value="{{ form_data.get('start-house', '') }}" placeholder="Дом" required>
                     <input type="text" class="address-field entrance" name="start-entrance"
                            value="{{ form_data.get('start-entrance', '1') }}" placeholder="пд.">
                 </div>
@@ -97,22 +92,22 @@
             <div>
                 <h2>Точки маршрута:</h2>
                 <div id="points-container">
-                    {% for i in range(1, 2) %}
+                    {% for i in range(1, 4) %}
                         <div class="address-row point-row" data-index="{{ i }}">
                             <input type="text" class="address-field city" name="point-city-{{ i }}"
-                                   value="{{ form_data.get('point-city-' ~ i, 'Минск') }}" placeholder="Город" {% if i == 1 %}required{% endif %}>
+                                   value="{{ form_data.get('point-city-' ~ i, '') }}" placeholder="Город" {% if i == 1 %}required{% endif %}>
                             <input type="text" class="address-field street" name="point-street-{{ i }}"
                                    value="{{ form_data.get('point-street-' ~ i, '') }}" placeholder="Улица" {% if i == 1 %}required{% endif %}>
                             <input type="text" class="address-field house" name="point-house-{{ i }}"
                                    value="{{ form_data.get('point-house-' ~ i, '') }}" placeholder="Дом" {% if i == 1 %}required{% endif %}>
                             <input type="text" class="address-field entrance" name="point-entrance-{{ i }}"
                                    value="{{ form_data.get('point-entrance-' ~ i, '1') }}" placeholder="пд.">
-                            <div class="controls">
-                                {% if i > 1 %}
-                                    <button type="button" class="move-btn" onclick="movePointUp(this)">↑</button>
-                                {% endif %}
-                                <button type="button" class="remove-btn" onclick="removePoint(this)">×</button>
-                            </div>
+                            {% if i > 1 %}
+                                <button type="button" class="move-btn up-btn" onclick="movePointUp(this)">↑</button>
+                            {% else %}
+                                <div style="width: 30px;"></div>
+                            {% endif %}
+                            <button type="button" class="remove-btn" onclick="removePoint(this)">×</button>
                         </div>
                     {% endfor %}
                 </div>
@@ -124,8 +119,9 @@
     </div>
 
     <script>
-        let pointCounter = 3;
+        let pointCounter = 3; // Начальное количество точек
 
+        // Добавление новой точки
         document.getElementById('add-point').addEventListener('click', function() {
             if (pointCounter >= 10) {
                 alert('Максимум 10 точек маршрута');
@@ -143,21 +139,21 @@
                 <input type="text" class="address-field street" name="point-street-${pointCounter}" placeholder="Улица">
                 <input type="text" class="address-field house" name="point-house-${pointCounter}" placeholder="Дом">
                 <input type="text" class="address-field entrance" name="point-entrance-${pointCounter}" placeholder="пд." value="1">
-                <div class="controls">
-                    <button type="button" class="move-btn" onclick="movePointUp(this)">↑</button>
-                    <button type="button" class="remove-btn" onclick="removePoint(this)">×</button>
-                </div>
+                <button type="button" class="move-btn up-btn" onclick="movePointUp(this)">↑</button>
+                <button type="button" class="remove-btn" onclick="removePoint(this)">×</button>
             `;
 
             container.appendChild(newPoint);
         });
 
+        // Удаление точки
         function removePoint(btn) {
             const row = btn.closest('.point-row');
             if (document.querySelectorAll('.point-row').length > 1) {
                 row.remove();
                 renumberPoints();
             } else {
+                // Не удаляем последнюю точку, просто очищаем поля
                 row.querySelectorAll('input').forEach(input => {
                     if (!input.name.includes('entrance')) {
                         input.value = '';
@@ -168,6 +164,7 @@
             }
         }
 
+        // Перемещение точки вверх
         function movePointUp(btn) {
             const row = btn.closest('.point-row');
             const prevRow = row.previousElementSibling;
@@ -177,6 +174,7 @@
             }
         }
 
+        // Перенумерация точек после изменений
         function renumberPoints() {
             const rows = document.querySelectorAll('.point-row');
             rows.forEach((row, index) => {

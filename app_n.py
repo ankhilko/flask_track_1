@@ -26,7 +26,7 @@ def index():
         # Получаем точки маршрута
         addresses = []
         for i in range(1, 11):
-            city = request.form.get(f'point-city-{i}', DEFAULT_CITY).strip()
+            city = request.form.get(f'point-city-{i}', '').strip()
             street = request.form.get(f'point-street-{i}', '').strip()
             house = request.form.get(f'point-house-{i}', '').strip()
             entrance = request.form.get(f'point-entrance-{i}', DEFAULT_ENTRANCE).strip()
@@ -57,4 +57,4 @@ def generate_yandex_maps_route(start_point, addresses):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
