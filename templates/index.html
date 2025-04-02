@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Построение маршрута</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .top-section {
+            height: 15%;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            border-bottom: 1px solid #ccc;
+        }
+        .middle-section {
+            height: 80%;
+            box-sizing: border-box;
+        }
+        .bottom-section {
+            height: 5%;
+            padding: 10px;
+            box-sizing: border-box;
+            border-top: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .point-input {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .point-input input {
+            flex-grow: 1;
+            margin-right: 5px;
+            padding: 5px;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        button {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .move-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-section" id="points-section">
+            <div id="point-inputs">
+                <!-- Точки будут добавлены здесь -->
+            </div>
+            <button id="add-point">Добавить точку</button>
+            <button id="build-route">Проложить маршрут</button>
+        </div>
+        <div class="middle-section">
+            <div id="map"></div>
+        </div>
+        <div class="bottom-section">
+            <input type="text" id="start-point" placeholder="Начальная точка или текущее местоположение">
+            <span id="route-time">Время в пути: -</span>
+            <button id="optimize-btn" disabled>Оптимизировать</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Инициализация карты
+            ymaps.ready(initMap);
+
+            let map;
+            let route;
+            let currentPoints = [];
+
+            // Элементы DOM
+            const pointsContainer = document.getElementById('point-inputs');
+            const addPointBtn = document.getElementById('add-point');
+            const buildRouteBtn = document.getElementById('build-route');
+            const startPointInput = document.getElementById('start-point');
+            const routeTimeSpan = document.getElementById('route-time');
+            const optimizeBtn = document.getElementById('optimize-btn');
+
+            // Добавляем начальные точки (10 полей)
+            for (let i = 0; i < 10; i++) {
+                addPointInput();
+            }
+
+            // Функция добавления нового поля для точки
+            function addPointInput() {
+                const div = document.createElement('div');
+                div.className = 'point-input';
+                div.innerHTML = `
+                    <input type="text" placeholder="Точка маршрута ${pointsContainer.children.length + 1}">
+                    <button class="move-btn up-btn">↑</button>
+                    <button class="move-btn down-btn">↓</button>
+                    <button class="move-btn remove-btn">×</button>
+                `;
+                pointsContainer.appendChild(div);
+
+                // Назначаем обработчики для кнопок
+                const upBtn = div.querySelector('.up-btn');
+                const downBtn = div.querySelector('.down-btn');
+                const removeBtn = div.querySelector('.remove-btn');
+
+                upBtn.addEventListener('click', function() {
+                    if (div.previousElementSibling) {
+                        div.parentNode.insertBefore(div, div.previousElementSibling);
+                    }
+                });
+
+                downBtn.addEventListener('click', function() {
+                    if (div.nextElementSibling) {
+                        div.parentNode.insertBefore(div.nextElementSibling, div);
+                    }
+                });
+
+                removeBtn.addEventListener('click', function() {
+                    div.remove();
+                });
+            }
+
+            // Кнопка добавления новой точки
+            addPointBtn.addEventListener('click', addPointInput);
+
+            // Инициализация карты
+            function initMap() {
+                map = new ymaps.Map('map', {
+                    center: [53.902284, 27.561831], // Минск
+                    zoom: 12
+                });
+
+                // Пытаемся определить местоположение пользователя
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        function(position) {
+                            const userLocation = [position.coords.latitude, position.coords.longitude];
+                            startPointInput.value = `${userLocation[0]}, ${userLocation[1]}`;
+
+                            // Центрируем карту на пользователе
+                            map.setCenter(userLocation, 15);
+
+                            // Добавляем метку местоположения пользователя
+                            new ymaps.Placemark(userLocation, {
+                                balloonContent: 'Ваше местоположение'
+                            }, {
+                                preset: 'islands#blueDotIcon'
+                            }).then(function(placemark) {
+                                map.geoObjects.add(placemark);
+                            });
+                        },
+                        function(error) {
+                            console.error('Ошибка получения местоположения:', error);
+                        }
+                    );
+                }
+            }
+
+            // Построение маршрута
+            buildRouteBtn.addEventListener('click', function() {
+                const startPoint = startPointInput.value.trim();
+                if (!startPoint) {
+                    alert('Укажите начальную точку маршрута');
+                    return;
+                }
+
+                // Собираем точки маршрута
+                const points = [];
+                const inputs = pointsContainer.querySelectorAll('input');
+                inputs.forEach(input => {
+                    if (input.value.trim()) {
+                        points.push(input.value.trim());
+                    }
+                });
+
+                if (points.length === 0) {
+                    alert('Добавьте хотя бы одну точку маршрута');
+                    return;
+                }
+
+                // Очищаем предыдущий маршрут
+                if (route) {
+                    map.geoObjects.remove(route);
+                }
+
+                // Сохраняем текущие точки
+                currentPoints = [startPoint, ...points];
+
+                // Строим маршрут (в демо-режиме просто добавляем метки)
+                buildDemoRoute(startPoint, points);
+
+                // Активируем кнопку оптимизации
+                optimizeBtn.disabled = false;
+            });
+
+            // Функция для демонстрации построения маршрута (без реального API)
+            function buildDemoRoute(startPoint, points) {
+                // Очищаем карту
+                map.geoObjects.removeAll();
+
+                // Добавляем начальную точку
+                ymaps.geocode(startPoint).then(function(res) {
+                    const firstGeoObject = res.geoObjects.get(0);
+                    if (firstGeoObject) {
+                        const coords = firstGeoObject.geometry.getCoordinates();
+
+                        new ymaps.Placemark(coords, {
+                            balloonContent: 'Начальная точка'
+                        }, {
+                            preset: 'islands#redIcon'
+                        }).then(function(placemark) {
+                            map.geoObjects.add(placemark);
+                            map.setCenter(coords, 12);
+                        });
+                    }
+                });
+
+                // Добавляем точки маршрута
+                points.forEach((point, index) => {
+                    ymaps.geocode(point).then(function(res) {
+                        const firstGeoObject = res.geoObjects.get(0);
+                        if (firstGeoObject) {
+                            const coords = firstGeoObject.geometry.getCoordinates();
+
+                            new ymaps.Placemark(coords, {
+                                balloonContent: `Точка ${index + 1}: ${point}`
+                            }, {
+                                preset: 'islands#blueIcon'
+                            }).then(function(placemark) {
+                                map.geoObjects.add(placemark);
+                            });
+                        }
+                    });
+                });
+
+                // В демо-режиме просто показываем случайное время
+                routeTimeSpan.textContent = `Время в пути: ~${Math.round(Math.random() * 30 + 30)} мин`;
+            }
+
+            // Оптимизация маршрута
+            optimizeBtn.addEventListener('click', function() {
+                if (currentPoints.length < 2) {
+                    alert('Нет точек для оптимизации');
+                    return;
+                }
+
+                // Отправляем запрос на сервер для "оптимизации"
+                fetch('/optimize_route', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        points: currentPoints
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+
+                    // В реальном приложении здесь бы обновлялся маршрут
+                    // В демо-режиме просто обновляем точки в интерфейсе
+                    if (data.optimized_points && data.optimized_points.length > 1) {
+                        startPointInput.value = data.optimized_points[0];
+
+                        // Обновляем поля ввода
+                        const inputs = pointsContainer.querySelectorAll('input');
+                        for (let i = 0; i < inputs.length; i++) {
+                            if (i < data.optimized_points.length - 1) {
+                                inputs[i].value = data.optimized_points[i + 1];
+                            } else {
+                                inputs[i].value = '';
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка оптимизации:', error);
+                    alert('Произошла ошибка при оптимизации маршрута');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
